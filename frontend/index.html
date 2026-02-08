@@ -16,8 +16,52 @@
 <body>
   <div class="app-container">
 
+    <!-- ===== Screen 0: Login ===== -->
+    <section id="screen-login" class="screen screen--active" aria-label="Login to Instagram">
+      <header class="screen__header">
+        <h1 class="brand-title">INSTA WINNER</h1>
+      </header>
+
+      <div class="screen__content">
+        <div class="hero">
+          <h2 class="hero__title">Connect Your<br>Account</h2>
+          <p class="hero__subtitle">Log in with your Instagram to get started</p>
+        </div>
+
+        <form id="login-form" class="login-form" novalidate>
+          <div class="input-group">
+            <input
+              type="text"
+              id="login-username-input"
+              class="input-group__field"
+              placeholder="Instagram username"
+              autocomplete="username"
+              required
+              aria-label="Instagram username"
+            >
+          </div>
+          <div class="input-group">
+            <input
+              type="password"
+              id="login-password-input"
+              class="input-group__field"
+              placeholder="Password"
+              autocomplete="current-password"
+              required
+              aria-label="Instagram password"
+            >
+          </div>
+          <p id="login-error" class="error-message" role="alert" hidden></p>
+          <button type="submit" id="login-btn" class="btn btn--primary">
+            <span class="btn__label">LOGIN</span>
+            <span class="btn__spinner" hidden aria-hidden="true"></span>
+          </button>
+        </form>
+      </div>
+    </section>
+
     <!-- ===== Screen 1: Paste Link ===== -->
-    <section id="screen-paste-link" class="screen screen--active" aria-label="Paste Instagram link">
+    <section id="screen-paste-link" class="screen" aria-label="Paste Instagram link" hidden>
       <header class="screen__header">
         <h1 class="brand-title">INSTA WINNER</h1>
       </header>
