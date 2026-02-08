@@ -47,7 +47,7 @@ app.add_middleware(
 )
 
 
-@app.post("/api/fetch-comments", response_model=FetchCommentsResponse)
+@app.post("/api/fetch-comments", response_model=FetchCommentsResponse)  # type: ignore[untyped-decorator]
 async def api_fetch_comments(request: FetchCommentsRequest) -> FetchCommentsResponse:
     """Scrape comments from a public Instagram post.
 
@@ -79,7 +79,7 @@ async def api_fetch_comments(request: FetchCommentsRequest) -> FetchCommentsResp
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
-@app.post("/api/pick-winners", response_model=PickWinnersResponse)
+@app.post("/api/pick-winners", response_model=PickWinnersResponse)  # type: ignore[untyped-decorator]
 async def api_pick_winners(request: PickWinnersRequest) -> PickWinnersResponse:
     """Select random giveaway winners from eligible commenters.
 
@@ -110,7 +110,7 @@ async def api_pick_winners(request: PickWinnersRequest) -> PickWinnersResponse:
     return PickWinnersResponse(winners=winners)
 
 
-@app.get("/")
+@app.get("/")  # type: ignore[untyped-decorator]
 async def serve_index() -> FileResponse:
     """Serve the frontend single-page application entry point."""
     return FileResponse(_FRONTEND_DIR / "index.html")
