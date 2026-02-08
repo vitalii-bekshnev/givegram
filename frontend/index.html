@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Givegram — Instagram Giveaway Winner Picker</title>
+  <meta name="description" content="The easiest way to pick random winners from Instagram giveaway comments.">
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,700&family=Inter:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  >
+</head>
+<body>
+  <div class="app-container">
+
+    <!-- ===== Screen 1: Paste Link ===== -->
+    <section id="screen-paste-link" class="screen screen--active" aria-label="Paste Instagram link">
+      <header class="screen__header">
+        <h1 class="brand-title">INSTA WINNER</h1>
+      </header>
+
+      <div class="screen__content">
+        <div class="hero">
+          <h2 class="hero__title">Start Your<br>Giveaway</h2>
+          <p class="hero__subtitle">The easiest way to find your winners</p>
+        </div>
+
+        <form id="fetch-comments-form" class="paste-link-form" novalidate>
+          <div class="input-group">
+            <input
+              type="url"
+              id="instagram-url-input"
+              class="input-group__field"
+              placeholder="Paste Instagram link here..."
+              autocomplete="off"
+              required
+              aria-label="Instagram post URL"
+            >
+          </div>
+          <p id="url-error" class="error-message" role="alert" hidden></p>
+          <button type="submit" id="fetch-comments-btn" class="btn btn--primary">
+            <span class="btn__label">FETCH COMMENTS</span>
+            <span class="btn__spinner" hidden aria-hidden="true"></span>
+          </button>
+        </form>
+      </div>
+    </section>
+
+    <!-- ===== Screen 2: Giveaway Settings ===== -->
+    <section id="screen-settings" class="screen" aria-label="Giveaway settings" hidden>
+      <header class="screen__header">
+        <h1 class="brand-title">GIVEAWAY SETTINGS</h1>
+      </header>
+
+      <div class="screen__content">
+        <!-- Number of Winners -->
+        <fieldset class="settings-card">
+          <legend class="settings-card__title">NUMBER OF WINNERS</legend>
+          <div class="option-group" role="radiogroup" aria-label="Number of winners">
+            <button type="button" class="option-btn option-btn--selected" data-setting="num-winners" data-value="1" aria-pressed="true">1</button>
+            <button type="button" class="option-btn" data-setting="num-winners" data-value="2" aria-pressed="false">2</button>
+            <button type="button" class="option-btn" data-setting="num-winners" data-value="3" aria-pressed="false">3</button>
+            <button type="button" class="option-btn" data-setting="num-winners" data-value="4" aria-pressed="false">4</button>
+            <button type="button" class="option-btn" data-setting="num-winners" data-value="5" aria-pressed="false">5</button>
+          </div>
+        </fieldset>
+
+        <!-- Min. Comments Per User -->
+        <fieldset class="settings-card">
+          <legend class="settings-card__title">MIN. COMMENTS PER USER</legend>
+          <div class="option-group" role="radiogroup" aria-label="Minimum comments per user">
+            <button type="button" class="option-btn option-btn--selected" data-setting="min-comments" data-value="1" aria-pressed="true">1</button>
+            <button type="button" class="option-btn" data-setting="min-comments" data-value="2" aria-pressed="false">2</button>
+            <button type="button" class="option-btn" data-setting="min-comments" data-value="3" aria-pressed="false">3</button>
+            <button type="button" class="option-btn" data-setting="min-comments" data-value="4" aria-pressed="false">4</button>
+            <button type="button" class="option-btn" data-setting="min-comments" data-value="5" aria-pressed="false">5</button>
+          </div>
+        </fieldset>
+
+        <p id="settings-error" class="error-message" role="alert" hidden></p>
+      </div>
+
+      <footer class="screen__footer">
+        <button type="button" id="run-giveaway-btn" class="btn btn--primary">
+          <span class="btn__label">RUN GIVEAWAY</span>
+          <span class="btn__spinner" hidden aria-hidden="true"></span>
+        </button>
+      </footer>
+    </section>
+
+    <!-- ===== Screen 3: Searching Animation ===== -->
+    <section id="screen-searching" class="screen" aria-label="Searching for winners" hidden>
+      <header class="screen__header">
+        <h1 class="brand-title" id="finding-winner-label">FINDING WINNER 1</h1>
+      </header>
+
+      <div class="screen__content screen__content--centered">
+        <div class="progress-ring" aria-live="polite">
+          <svg class="progress-ring__svg" viewBox="0 0 200 200" aria-hidden="true">
+            <!-- Background track -->
+            <circle
+              class="progress-ring__track"
+              cx="100"
+              cy="100"
+              r="90"
+              fill="none"
+              stroke-width="8"
+            />
+            <!-- Animated progress arc -->
+            <circle
+              class="progress-ring__arc"
+              cx="100"
+              cy="100"
+              r="90"
+              fill="none"
+              stroke-width="8"
+              stroke-linecap="round"
+              transform="rotate(-90 100 100)"
+            />
+          </svg>
+          <span class="progress-ring__countdown" id="countdown-number" aria-label="Countdown">05</span>
+        </div>
+
+        <p class="searching-label">SEARCHING COMMENTS...</p>
+      </div>
+    </section>
+
+    <!-- ===== Screen 4: Winner Results ===== -->
+    <section id="screen-results" class="screen" aria-label="Giveaway results" hidden>
+      <header class="screen__header">
+        <h1 class="brand-title">FINAL RESULTS</h1>
+      </header>
+
+      <div class="screen__content">
+        <h2 class="results-title">Our Lucky<br>Winners!</h2>
+
+        <ul id="winners-list" class="winners-list" aria-label="Winners">
+          <!-- Winner cards are injected dynamically by app.js.
+               Template for each winner:
+               <li class="winner-card">
+                 <span class="winner-card__avatar" aria-hidden="true"></span>
+                 <span class="winner-card__username">@username</span>
+                 <span class="winner-card__trophy" aria-hidden="true">🏆</span>
+               </li>
+          -->
+        </ul>
+      </div>
+
+      <footer class="screen__footer">
+        <button type="button" id="share-btn" class="btn btn--gold">
+          SHARE ON INSTAGRAM
+        </button>
+        <button type="button" id="run-again-btn" class="btn btn--text">
+          Run Again
+        </button>
+      </footer>
+    </section>
+
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
