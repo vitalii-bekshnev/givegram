@@ -133,9 +133,19 @@ class SessionStore:
                 "This account requires two-factor authentication, which is not supported. "
                 "Disable 2FA or use a different account."
             ) from exc
+        except instaloader.exceptions.LoginException as exc:
+            # Catch the parent LoginException for cases like "Checkpoint required"
+            # that aren't raised as a more specific subclass.
+            error_msg = str(exc).lower()
+            if "checkpoint" in error_msg or "challenge" in error_msg:
+                raise ChallengeRequiredError(
+                    "Instagram requires a security checkpoint (email/SMS verification). "
+                    "Complete the challenge in the Instagram app, then try again."
+                ) from exc
+            raise LoginFailedError(f"Login failed: {exc}") from exc
         except instaloader.exceptions.ConnectionException as exc:
             error_msg = str(exc).lower()
-            if "challenge" in error_msg:
+            if "challenge" in error_msg or "checkpoint" in error_msg:
                 raise ChallengeRequiredError(
                     "Instagram requires a security challenge (email/SMS verification). "
                     "Complete the challenge in the Instagram app, then try again."
