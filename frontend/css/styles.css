@@ -273,6 +273,71 @@ a {
   gap: var(--space-md);
 }
 
+/* Monospace modifier for long token inputs */
+.input-group__field--mono {
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", "Consolas", monospace;
+  font-size: 0.8125rem;
+  letter-spacing: 0.02em;
+}
+
+/* --------------------------------------------------------------------------
+   7c. Login Instructions
+   -------------------------------------------------------------------------- */
+.login-instructions {
+  text-align: left;
+  padding: var(--space-md) var(--space-lg);
+  background-color: var(--color-white);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+}
+
+.login-instructions__heading {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-sm);
+}
+
+.login-instructions__steps {
+  list-style: decimal;
+  padding-left: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.login-instructions__steps li {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+.login-instructions__steps strong {
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+
+.login-instructions__steps kbd {
+  display: inline-block;
+  padding: 0.1em 0.4em;
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  background-color: var(--color-bg-start);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+}
+
+.login-instructions__steps code {
+  font-family: "SF Mono", "Fira Code", "Cascadia Code", "Consolas", monospace;
+  font-size: 0.8125rem;
+  color: var(--color-crimson);
+  background-color: var(--color-crimson-light);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+
 /* --------------------------------------------------------------------------
    8. Error Message
    -------------------------------------------------------------------------- */
