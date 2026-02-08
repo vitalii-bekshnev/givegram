@@ -1,7 +1,8 @@
 /**
  * Givegram — Instagram Giveaway Winner Picker
  *
- * Single-page app controller that manages four screens:
+ * Single-page app controller that manages five screens:
+ *   0. Login — authenticate with Instagram credentials
  *   1. Paste Link — accept an Instagram URL and fetch comments
  *   2. Giveaway Settings — choose number of winners & minimum comments
  *   3. Searching Animation — suspense countdown while "finding" winners
@@ -31,6 +32,7 @@ const API_BASE = "/api";
    ========================================================================== */
 
 const screens = {
+  login: document.getElementById("screen-login"),
   pasteLink: document.getElementById("screen-paste-link"),
   settings: document.getElementById("screen-settings"),
   searching: document.getElementById("screen-searching"),
@@ -38,7 +40,14 @@ const screens = {
 };
 
 const els = {
-  /* Screen 1 */
+  /* Screen 0 — Login */
+  loginForm: document.getElementById("login-form"),
+  usernameInput: document.getElementById("login-username-input"),
+  passwordInput: document.getElementById("login-password-input"),
+  loginError: document.getElementById("login-error"),
+  loginBtn: document.getElementById("login-btn"),
+
+  /* Screen 1 — Paste Link */
   fetchForm: document.getElementById("fetch-comments-form"),
   urlInput: document.getElementById("instagram-url-input"),
   urlError: document.getElementById("url-error"),
@@ -64,6 +73,8 @@ const els = {
    ========================================================================== */
 
 const state = {
+  /** Session ID returned by /api/login — required for authenticated API calls. */
+  sessionId: null,
   /** Commenter data returned by /api/fetch-comments. */
   users: [],
   /** Total comments fetched. */
@@ -141,12 +152,28 @@ function setButtonLoading(btn, loading) {
 }
 
 /**
+ * Custom error class for API responses that carries the HTTP status code,
+ * allowing callers to branch on specific statuses (e.g. 401 for expired sessions).
+ */
+class ApiError extends Error {
+  /**
+   * @param {string} message — Human-readable error detail.
+   * @param {number} status — HTTP status code from the response.
+   */
+  constructor(message, status) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+/**
  * Make a JSON POST request to an API endpoint.
  *
  * @param {string} endpoint — Relative path (e.g. "/api/fetch-comments").
  * @param {object} body — JSON-serialisable request body.
  * @returns {Promise<object>} Parsed JSON response.
- * @throws {Error} With the server's error detail if the response is not OK.
+ * @throws {ApiError} With the server's error detail and HTTP status if the response is not OK.
  */
 async function apiPost(endpoint, body) {
   const response = await fetch(`${API_BASE}${endpoint}`, {
@@ -158,10 +185,94 @@ async function apiPost(endpoint, body) {
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
     const detail = data.detail || `Request failed (HTTP ${response.status})`;
-    throw new Error(detail);
+    throw new ApiError(detail, response.status);
   }
 
   return response.json();
+}
+
+/* ==========================================================================
+   Session Expiry Helper
+   ========================================================================== */
+
+/**
+ * If an API error signals an expired or invalid session (HTTP 401),
+ * clear the session state and redirect the user to the login screen.
+ *
+ * @param {Error} err — The error thrown by apiPost.
+ * @returns {boolean} True if the error was a 401 and the redirect was triggered.
+ */
+function handleSessionExpiry(err) {
+  if (err instanceof ApiError && err.status === 401) {
+    state.sessionId = null;
+    navigateTo(screens.login);
+    showError(els.loginError, "Session expired, please log in again.");
+    return true;
+  }
+  return false;
+}
+
+/* ==========================================================================
+   Screen 0 — Login
+   ========================================================================== */
+
+/**
+ * Handle the login form submission.
+ * Validates inputs, authenticates via the API, stores the session ID,
+ * and advances to the Paste Link screen.
+ *
+ * @param {SubmitEvent} event
+ */
+async function handleLogin(event) {
+  event.preventDefault();
+  hideError(els.loginError);
+
+  const username = els.usernameInput.value.trim();
+  const password = els.passwordInput.value;
+
+  if (!username) {
+    showError(els.loginError, "Please enter your Instagram username.");
+    return;
+  }
+
+  if (!password) {
+    showError(els.loginError, "Please enter your password.");
+    return;
+  }
+
+  setButtonLoading(els.loginBtn, true);
+
+  try {
+    const data = await apiPost("/login", { username, password });
+    state.sessionId = data.session_id;
+
+    /* Clear login form for security. */
+    els.usernameInput.value = "";
+    els.passwordInput.value = "";
+
+    navigateTo(screens.pasteLink);
+  } catch (err) {
+    showError(els.loginError, err.message);
+  } finally {
+    setButtonLoading(els.loginBtn, false);
+  }
+}
+
+/**
+ * Log the user out by clearing the session on the server and locally,
+ * then navigate back to the login screen.
+ */
+async function handleLogout() {
+  if (state.sessionId) {
+    try {
+      await apiPost("/logout", { session_id: state.sessionId });
+    } catch {
+      /* Best-effort — proceed with local cleanup even if the server call fails. */
+    }
+  }
+
+  state.sessionId = null;
+  navigateTo(screens.login);
 }
 
 /* ==========================================================================
@@ -197,12 +308,17 @@ async function handleFetchComments(event) {
   setButtonLoading(els.fetchBtn, true);
 
   try {
-    const data = await apiPost("/fetch-comments", { url });
+    const data = await apiPost("/fetch-comments", {
+      url,
+      session_id: state.sessionId,
+    });
     state.users = data.users;
     state.totalComments = data.total_comments;
     navigateTo(screens.settings);
   } catch (err) {
-    showError(els.urlError, err.message);
+    if (!handleSessionExpiry(err)) {
+      showError(els.urlError, err.message);
+    }
   } finally {
     setButtonLoading(els.fetchBtn, false);
   }
@@ -421,8 +537,9 @@ async function handleShare() {
 }
 
 /**
- * Reset the application state and navigate back to Screen 1 so the user
- * can start a new giveaway.
+ * Reset the giveaway state (but keep the session) and navigate back
+ * to the Paste Link screen so the user can start a new giveaway
+ * without re-authenticating.
  */
 function handleRunAgain() {
   state.users = [];
@@ -444,6 +561,7 @@ function handleRunAgain() {
   hideError(els.settingsError);
   els.winnersList.innerHTML = "";
 
+  /* Navigate to paste-link, not login — session is still valid. */
   navigateTo(screens.pasteLink);
 }
 
@@ -453,8 +571,20 @@ function handleRunAgain() {
 
 /** Wire up all event listeners once the DOM is ready. */
 function init() {
-  /* Screen 1 */
+  /* Screen 0 — Login */
+  els.loginForm.addEventListener("submit", handleLogin);
+
+  /* Screen 1 — Paste Link */
   els.fetchForm.addEventListener("submit", handleFetchComments);
+
+  /* Logout link (if present in the DOM). */
+  const logoutLink = document.getElementById("logout-link");
+  if (logoutLink) {
+    logoutLink.addEventListener("click", (event) => {
+      event.preventDefault();
+      handleLogout();
+    });
+  }
 
   /* Screen 2 — delegate option clicks to the settings content area */
   screens.settings

@@ -154,6 +154,7 @@ a {
    4. Screen Header
    -------------------------------------------------------------------------- */
 .screen__header {
+  position: relative;
   text-align: center;
   padding: var(--space-xl) 0 var(--space-md);
 }
@@ -165,6 +166,23 @@ a {
   letter-spacing: 0.35em;
   color: var(--color-crimson);
   text-transform: uppercase;
+}
+
+/* Logout link — positioned in the top-right corner of the header */
+.logout-link {
+  position: absolute;
+  top: var(--space-xl);
+  right: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  transition: color var(--transition-fast);
+  cursor: pointer;
+}
+
+.logout-link:hover {
+  color: var(--color-crimson);
 }
 
 /* --------------------------------------------------------------------------
