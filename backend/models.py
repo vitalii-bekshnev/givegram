@@ -6,22 +6,26 @@ from pydantic import BaseModel, Field, HttpUrl
 class LoginRequest(BaseModel):
     """Request body for the /api/login endpoint.
 
-    Carries Instagram credentials so the backend can create an
-    authenticated Instaloader session on the user's behalf.
+    Carries the Instagram ``sessionid`` cookie so the backend can
+    create an authenticated Instaloader session without triggering
+    checkpoint/challenge flows.
     """
 
-    username: str = Field(description="Instagram username")
-    password: str = Field(description="Instagram password")
+    session_cookie: str = Field(
+        description="Value of the 'sessionid' cookie from an active instagram.com browser session"
+    )
 
 
 class LoginResponse(BaseModel):
     """Response body returned by /api/login.
 
     Contains the opaque session identifier that the frontend must
-    include in all subsequent authenticated requests.
+    include in all subsequent authenticated requests, along with the
+    Instagram username associated with the validated session cookie.
     """
 
     session_id: str = Field(description="Session ID for subsequent requests")
+    username: str = Field(description="Instagram username resolved from the session cookie")
 
 
 class FetchCommentsRequest(BaseModel):
