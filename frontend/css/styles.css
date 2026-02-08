@@ -1,0 +1,611 @@
+/* ==========================================================================
+   Givegram — Instagram Giveaway Winner Picker
+   Design tokens, base styles, component styles, and screen-specific layouts.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. CSS Custom Properties (Design Tokens)
+   -------------------------------------------------------------------------- */
+:root {
+  /* Background gradient */
+  --color-bg-start: #f5f0e8;
+  --color-bg-end: #e8e0d4;
+
+  /* Accent palette */
+  --color-crimson: #8b1a1a;
+  --color-crimson-hover: #a52222;
+  --color-crimson-light: rgba(139, 26, 26, 0.08);
+  --color-gold: #d4a844;
+  --color-gold-hover: #c49a38;
+  --color-gold-light: rgba(212, 168, 68, 0.15);
+
+  /* Neutrals */
+  --color-white: #ffffff;
+  --color-text-primary: #2c2420;
+  --color-text-secondary: #6b5e54;
+  --color-text-muted: #9a8d82;
+  --color-border: rgba(139, 26, 26, 0.12);
+  --color-shadow: rgba(44, 36, 32, 0.08);
+  --color-error: #c0392b;
+
+  /* Typography */
+  --font-serif: "Playfair Display", Georgia, "Times New Roman", serif;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  /* Spacing */
+  --space-xs: 0.25rem;   /* 4px */
+  --space-sm: 0.5rem;    /* 8px */
+  --space-md: 1rem;      /* 16px */
+  --space-lg: 1.5rem;    /* 24px */
+  --space-xl: 2rem;      /* 32px */
+  --space-2xl: 3rem;     /* 48px */
+
+  /* Radii */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 50px;
+  --radius-circle: 50%;
+
+  /* Shadows */
+  --shadow-card: 0 2px 16px var(--color-shadow);
+  --shadow-btn: 0 4px 12px rgba(139, 26, 26, 0.2);
+  --shadow-btn-gold: 0 4px 12px rgba(212, 168, 68, 0.3);
+
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-base: 250ms ease;
+  --transition-slow: 400ms ease;
+}
+
+/* --------------------------------------------------------------------------
+   2. Reset & Base Styles
+   -------------------------------------------------------------------------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-weight: 400;
+  color: var(--color-text-primary);
+  background: linear-gradient(180deg, var(--color-bg-start) 0%, var(--color-bg-end) 100%);
+  min-height: 100vh;
+  min-height: 100dvh;
+  line-height: 1.5;
+}
+
+ul,
+ol {
+  list-style: none;
+}
+
+fieldset {
+  border: none;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+input {
+  font-family: inherit;
+  border: none;
+  outline: none;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* --------------------------------------------------------------------------
+   3. App Container & Screen Layout
+   -------------------------------------------------------------------------- */
+.app-container {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  min-height: 100vh;
+  min-height: 100dvh;
+  margin: 0 auto;
+  overflow: hidden;
+}
+
+.screen {
+  display: none;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: var(--space-lg);
+  padding-bottom: var(--space-2xl);
+  animation: screen-fade-in var(--transition-slow) ease both;
+}
+
+.screen--active {
+  display: flex;
+}
+
+@keyframes screen-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   4. Screen Header
+   -------------------------------------------------------------------------- */
+.screen__header {
+  text-align: center;
+  padding: var(--space-xl) 0 var(--space-md);
+}
+
+.brand-title {
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.35em;
+  color: var(--color-crimson);
+  text-transform: uppercase;
+}
+
+/* --------------------------------------------------------------------------
+   5. Screen Content & Footer
+   -------------------------------------------------------------------------- */
+.screen__content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.screen__content--centered {
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xl);
+}
+
+.screen__footer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding-top: var(--space-lg);
+}
+
+/* --------------------------------------------------------------------------
+   6. Hero Section (Screen 1)
+   -------------------------------------------------------------------------- */
+.hero {
+  text-align: center;
+  padding: var(--space-xl) 0;
+}
+
+.hero__title {
+  font-family: var(--font-serif);
+  font-size: 2.5rem;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-sm);
+}
+
+.hero__subtitle {
+  font-size: 1rem;
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+
+/* --------------------------------------------------------------------------
+   7. Input Group (Paste Link Form)
+   -------------------------------------------------------------------------- */
+.paste-link-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.input-group {
+  position: relative;
+}
+
+.input-group__field {
+  width: 100%;
+  padding: var(--space-md) var(--space-lg);
+  font-size: 0.9375rem;
+  color: var(--color-text-primary);
+  background-color: var(--color-white);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.input-group__field::placeholder {
+  color: var(--color-text-muted);
+}
+
+.input-group__field:focus {
+  border-color: var(--color-crimson);
+  box-shadow: 0 0 0 3px var(--color-crimson-light);
+}
+
+/* --------------------------------------------------------------------------
+   8. Error Message
+   -------------------------------------------------------------------------- */
+.error-message {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-error);
+  text-align: center;
+  padding: var(--space-xs) 0;
+}
+
+/* --------------------------------------------------------------------------
+   9. Buttons
+   -------------------------------------------------------------------------- */
+
+/* Primary (Crimson) */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: var(--space-md) var(--space-xl);
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border-radius: var(--radius-pill);
+  transition:
+    background-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    transform var(--transition-fast),
+    opacity var(--transition-fast);
+}
+
+.btn--primary {
+  color: var(--color-white);
+  background-color: var(--color-crimson);
+  box-shadow: var(--shadow-btn);
+}
+
+.btn--primary:hover {
+  background-color: var(--color-crimson-hover);
+  box-shadow: 0 6px 20px rgba(139, 26, 26, 0.3);
+  transform: translateY(-1px);
+}
+
+.btn--primary:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-btn);
+}
+
+.btn--primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Gold (Share) */
+.btn--gold {
+  color: var(--color-white);
+  background-color: var(--color-gold);
+  box-shadow: var(--shadow-btn-gold);
+}
+
+.btn--gold:hover {
+  background-color: var(--color-gold-hover);
+  box-shadow: 0 6px 20px rgba(212, 168, 68, 0.4);
+  transform: translateY(-1px);
+}
+
+.btn--gold:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-btn-gold);
+}
+
+/* Text / Ghost */
+.btn--text {
+  color: var(--color-text-secondary);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  background: none;
+  box-shadow: none;
+}
+
+.btn--text:hover {
+  color: var(--color-crimson);
+}
+
+/* Spinner inside button */
+.btn__spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2.5px solid rgba(255, 255, 255, 0.3);
+  border-top-color: var(--color-white);
+  border-radius: var(--radius-circle);
+  animation: spin 0.6s linear infinite;
+}
+
+.btn__spinner[hidden] {
+  display: none;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   10. Settings Cards (Screen 2)
+   -------------------------------------------------------------------------- */
+.settings-card {
+  background-color: var(--color-white);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.settings-card__title {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  text-align: center;
+  margin-bottom: var(--space-lg);
+}
+
+/* Option Group: row of circle buttons */
+.option-group {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-md);
+}
+
+.option-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  background-color: var(--color-bg-start);
+  border: 2px solid transparent;
+  border-radius: var(--radius-circle);
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.option-btn:hover {
+  border-color: var(--color-gold);
+  color: var(--color-gold);
+  transform: scale(1.05);
+}
+
+.option-btn--selected {
+  background-color: var(--color-gold);
+  color: var(--color-white);
+  border-color: var(--color-gold);
+}
+
+.option-btn--selected:hover {
+  background-color: var(--color-gold-hover);
+  border-color: var(--color-gold-hover);
+  color: var(--color-white);
+}
+
+/* --------------------------------------------------------------------------
+   11. Progress Ring (Screen 3 — Searching Animation)
+   -------------------------------------------------------------------------- */
+.progress-ring {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 200px;
+  height: 200px;
+}
+
+.progress-ring__svg {
+  width: 100%;
+  height: 100%;
+}
+
+.progress-ring__track {
+  stroke: var(--color-crimson-light);
+}
+
+.progress-ring__arc {
+  stroke: var(--color-crimson);
+  stroke-dasharray: 565.48;  /* 2 * π * 90 */
+  stroke-dashoffset: 565.48;
+  transition: stroke-dashoffset 1s linear;
+}
+
+.progress-ring__countdown {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-sans);
+  font-size: 3.5rem;
+  font-weight: 700;
+  color: var(--color-crimson);
+  line-height: 1;
+}
+
+.searching-label {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+}
+
+/* --------------------------------------------------------------------------
+   12. Results Screen (Screen 4)
+   -------------------------------------------------------------------------- */
+.results-title {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 2.25rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  color: var(--color-text-primary);
+  padding: var(--space-md) 0 var(--space-lg);
+}
+
+/* Winner Cards List */
+.winners-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.winner-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  background-color: var(--color-white);
+  border-radius: var(--radius-md);
+  padding: var(--space-md) var(--space-lg);
+  box-shadow: var(--shadow-card);
+  animation: winner-slide-in var(--transition-slow) ease both;
+}
+
+.winner-card:nth-child(1) { animation-delay: 0ms; }
+.winner-card:nth-child(2) { animation-delay: 100ms; }
+.winner-card:nth-child(3) { animation-delay: 200ms; }
+.winner-card:nth-child(4) { animation-delay: 300ms; }
+.winner-card:nth-child(5) { animation-delay: 400ms; }
+
+@keyframes winner-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Avatar placeholder — colored circle with gradient */
+.winner-card__avatar {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-circle);
+  background: linear-gradient(135deg, var(--color-crimson), var(--color-gold));
+}
+
+.winner-card__username {
+  flex: 1;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.winner-card__trophy {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+/* --------------------------------------------------------------------------
+   13. Utility / Accessibility
+   -------------------------------------------------------------------------- */
+[hidden] {
+  display: none !important;
+}
+
+/* Focus visible ring for keyboard navigation */
+:focus-visible {
+  outline: 2px solid var(--color-crimson);
+  outline-offset: 2px;
+}
+
+/* Reduced motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   14. Responsive Adjustments
+   -------------------------------------------------------------------------- */
+
+/* Slightly larger screens — add subtle phone-frame effect */
+@media (min-width: 480px) {
+  body {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: var(--space-xl) var(--space-md);
+  }
+
+  .app-container {
+    border-radius: var(--radius-lg);
+    box-shadow: 0 8px 40px rgba(44, 36, 32, 0.12);
+    min-height: auto;
+    max-height: 100vh;
+    overflow-y: auto;
+  }
+
+  .screen {
+    min-height: calc(100vh - var(--space-xl) * 2);
+  }
+}
+
+/* Larger desktop — slightly bigger text & spacing */
+@media (min-width: 768px) {
+  .hero__title {
+    font-size: 3rem;
+  }
+
+  .results-title {
+    font-size: 2.5rem;
+  }
+
+  .progress-ring {
+    width: 220px;
+    height: 220px;
+  }
+}
