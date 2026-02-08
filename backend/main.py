@@ -1,10 +1,13 @@
 """FastAPI application for the Givegram Instagram Giveaway Winner Picker.
 
-Exposes two API endpoints for fetching Instagram post comments and
-selecting random giveaway winners, and serves the frontend as static files.
+Exposes API endpoints for Instagram login/logout, fetching post comments,
+and selecting random giveaway winners. Also serves the frontend as static files.
 """
 
+import asyncio
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -15,6 +18,8 @@ from fastapi.staticfiles import StaticFiles
 from backend.models import (
     FetchCommentsRequest,
     FetchCommentsResponse,
+    LoginRequest,
+    LoginResponse,
     PickWinnersRequest,
     PickWinnersResponse,
 )
@@ -26,16 +31,57 @@ from backend.scraper import (
     ScraperError,
     fetch_comments,
 )
+from backend.session_store import (
+    ChallengeRequiredError,
+    LoginFailedError,
+    SessionNotFoundError,
+    TwoFactorRequiredError,
+    session_store,
+)
 from backend.winner_selector import InsufficientEligibleUsersError, pick_winners
 
 logger = logging.getLogger(__name__)
 
 _FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 
+# Interval between expired-session cleanup sweeps.
+_CLEANUP_INTERVAL_SECONDS = 300  # 5 minutes
+
+
+async def _periodic_session_cleanup() -> None:
+    """Run session_store.cleanup_expired() every _CLEANUP_INTERVAL_SECONDS.
+
+    Intended to be launched as a background task during application lifespan
+    so that stale sessions do not accumulate indefinitely.
+    """
+    while True:
+        await asyncio.sleep(_CLEANUP_INTERVAL_SECONDS)
+        session_store.cleanup_expired()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Manage application-wide startup and shutdown resources.
+
+    Starts a background task that periodically purges expired sessions.
+    The task is cancelled automatically when the application shuts down.
+    """
+    cleanup_task = asyncio.create_task(_periodic_session_cleanup())
+    logger.info("Started periodic session cleanup task (interval=%ds)", _CLEANUP_INTERVAL_SECONDS)
+    try:
+        yield
+    finally:
+        cleanup_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await cleanup_task
+        logger.info("Stopped periodic session cleanup task")
+
+
 app = FastAPI(
     title="Givegram",
     description="Instagram Giveaway Winner Picker API",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -47,14 +93,65 @@ app.add_middleware(
 )
 
 
-@app.post("/api/fetch-comments", response_model=FetchCommentsResponse)  # type: ignore[untyped-decorator]
-async def api_fetch_comments(request: FetchCommentsRequest) -> FetchCommentsResponse:
-    """Scrape comments from a public Instagram post.
+# ---------------------------------------------------------------------------
+# Auth endpoints
+# ---------------------------------------------------------------------------
 
-    Accepts an Instagram post URL, fetches all comments, and returns
-    a deduplicated list of commenters with their comment counts.
+
+@app.post("/api/login", response_model=LoginResponse)  # type: ignore[untyped-decorator]
+async def api_login(request: LoginRequest) -> LoginResponse:
+    """Authenticate with Instagram and create a session.
+
+    The returned session_id must be included in subsequent requests
+    that require an authenticated Instaloader instance (e.g. fetch-comments).
 
     Raises:
+        HTTPException 401: If the credentials are invalid.
+        HTTPException 403: If 2FA or a security challenge is required.
+    """
+    logger.info("Login attempt for user %r", request.username)
+
+    try:
+        session_id = await asyncio.to_thread(session_store.login, request.username, request.password)
+    except LoginFailedError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except TwoFactorRequiredError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ChallengeRequiredError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+    return LoginResponse(session_id=session_id)
+
+
+@app.post("/api/logout")  # type: ignore[untyped-decorator]
+async def api_logout(session_id: str) -> dict[str, str]:
+    """Log out by removing the session associated with the given ID.
+
+    This endpoint is idempotent -- calling it with an unknown or already-
+    removed session ID will still return a success response.
+
+    Args:
+        session_id: The session identifier to invalidate.
+    """
+    logger.info("Logout request for session %s", session_id)
+    session_store.remove(session_id)
+    return {"detail": "Logged out successfully"}
+
+
+# ---------------------------------------------------------------------------
+# Comment scraping
+# ---------------------------------------------------------------------------
+
+
+@app.post("/api/fetch-comments", response_model=FetchCommentsResponse)  # type: ignore[untyped-decorator]
+async def api_fetch_comments(request: FetchCommentsRequest) -> FetchCommentsResponse:
+    """Scrape comments from an Instagram post using an authenticated session.
+
+    Accepts an Instagram post URL and a session_id, fetches all comments,
+    and returns a deduplicated list of commenters with their comment counts.
+
+    Raises:
+        HTTPException 401: If the session is missing or expired.
         HTTPException 400: If the URL is invalid.
         HTTPException 404: If the post cannot be found.
         HTTPException 403: If the post is private.
@@ -62,10 +159,15 @@ async def api_fetch_comments(request: FetchCommentsRequest) -> FetchCommentsResp
         HTTPException 502: For any other upstream scraping failure.
     """
     url_str = str(request.url)
-    logger.info("Received fetch-comments request for URL: %s", url_str)
+    logger.info("Received fetch-comments request for URL: %s (session=%s)", url_str, request.session_id)
 
     try:
-        return fetch_comments(url_str)
+        loader = session_store.get_client(request.session_id)
+    except SessionNotFoundError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+    try:
+        return await asyncio.to_thread(fetch_comments, url_str, loader)
     except InvalidURLError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except PostNotFoundError as exc:
@@ -77,6 +179,11 @@ async def api_fetch_comments(request: FetchCommentsRequest) -> FetchCommentsResp
     except ScraperError as exc:
         logger.exception("Unexpected scraper error for URL: %s", url_str)
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+# ---------------------------------------------------------------------------
+# Winner selection
+# ---------------------------------------------------------------------------
 
 
 @app.post("/api/pick-winners", response_model=PickWinnersResponse)  # type: ignore[untyped-decorator]
@@ -108,6 +215,11 @@ async def api_pick_winners(request: PickWinnersRequest) -> PickWinnersResponse:
 
     logger.info("Selected winners: %s", winners)
     return PickWinnersResponse(winners=winners)
+
+
+# ---------------------------------------------------------------------------
+# Frontend serving
+# ---------------------------------------------------------------------------
 
 
 @app.get("/")  # type: ignore[untyped-decorator]
