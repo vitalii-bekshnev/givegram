@@ -32,10 +32,8 @@ from backend.scraper import (
     fetch_comments,
 )
 from backend.session_store import (
-    ChallengeRequiredError,
     LoginFailedError,
     SessionNotFoundError,
-    TwoFactorRequiredError,
     session_store,
 )
 from backend.winner_selector import InsufficientEligibleUsersError, pick_winners
@@ -100,27 +98,22 @@ app.add_middleware(
 
 @app.post("/api/login", response_model=LoginResponse)  # type: ignore[untyped-decorator]
 async def api_login(request: LoginRequest) -> LoginResponse:
-    """Authenticate with Instagram and create a session.
+    """Authenticate with Instagram using a session cookie and create a session.
 
     The returned session_id must be included in subsequent requests
     that require an authenticated Instaloader instance (e.g. fetch-comments).
 
     Raises:
-        HTTPException 401: If the credentials are invalid.
-        HTTPException 403: If 2FA or a security challenge is required.
+        HTTPException 401: If the session cookie is invalid or expired.
     """
-    logger.info("Login attempt for user %r", request.username)
+    logger.info("Login attempt via session cookie")
 
     try:
-        session_id = await asyncio.to_thread(session_store.login, request.username, request.password)
+        session_id, username = await asyncio.to_thread(session_store.login_with_cookie, request.session_cookie)
     except LoginFailedError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
-    except TwoFactorRequiredError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
-    except ChallengeRequiredError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
 
-    return LoginResponse(session_id=session_id)
+    return LoginResponse(session_id=session_id, username=username)
 
 
 @app.post("/api/logout")  # type: ignore[untyped-decorator]
