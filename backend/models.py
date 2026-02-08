@@ -3,13 +3,36 @@
 from pydantic import BaseModel, Field, HttpUrl
 
 
+class LoginRequest(BaseModel):
+    """Request body for the /api/login endpoint.
+
+    Carries Instagram credentials so the backend can create an
+    authenticated Instaloader session on the user's behalf.
+    """
+
+    username: str = Field(description="Instagram username")
+    password: str = Field(description="Instagram password")
+
+
+class LoginResponse(BaseModel):
+    """Response body returned by /api/login.
+
+    Contains the opaque session identifier that the frontend must
+    include in all subsequent authenticated requests.
+    """
+
+    session_id: str = Field(description="Session ID for subsequent requests")
+
+
 class FetchCommentsRequest(BaseModel):
     """Request body for the /api/fetch-comments endpoint.
 
-    Contains the Instagram post URL to scrape comments from.
+    Contains the Instagram post URL to scrape comments from and
+    the session ID of an authenticated Instaloader session.
     """
 
     url: HttpUrl = Field(description="Public Instagram post URL to fetch comments from")
+    session_id: str = Field(description="Session ID obtained from /api/login")
 
 
 class CommentUserData(BaseModel):
