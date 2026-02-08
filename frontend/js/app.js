@@ -42,8 +42,7 @@ const screens = {
 const els = {
   /* Screen 0 — Login */
   loginForm: document.getElementById("login-form"),
-  usernameInput: document.getElementById("login-username-input"),
-  passwordInput: document.getElementById("login-password-input"),
+  sessionCookieInput: document.getElementById("login-session-cookie-input"),
   loginError: document.getElementById("login-error"),
   loginBtn: document.getElementById("login-btn"),
 
@@ -218,8 +217,8 @@ function handleSessionExpiry(err) {
 
 /**
  * Handle the login form submission.
- * Validates inputs, authenticates via the API, stores the session ID,
- * and advances to the Paste Link screen.
+ * Validates the session cookie input, authenticates via the API,
+ * stores the session ID, and advances to the Paste Link screen.
  *
  * @param {SubmitEvent} event
  */
@@ -227,28 +226,21 @@ async function handleLogin(event) {
   event.preventDefault();
   hideError(els.loginError);
 
-  const username = els.usernameInput.value.trim();
-  const password = els.passwordInput.value;
+  const sessionCookie = els.sessionCookieInput.value.trim();
 
-  if (!username) {
-    showError(els.loginError, "Please enter your Instagram username.");
-    return;
-  }
-
-  if (!password) {
-    showError(els.loginError, "Please enter your password.");
+  if (!sessionCookie) {
+    showError(els.loginError, "Please paste your Instagram session cookie.");
     return;
   }
 
   setButtonLoading(els.loginBtn, true);
 
   try {
-    const data = await apiPost("/login", { username, password });
+    const data = await apiPost("/login", { session_cookie: sessionCookie });
     state.sessionId = data.session_id;
 
-    /* Clear login form for security. */
-    els.usernameInput.value = "";
-    els.passwordInput.value = "";
+    /* Clear the cookie input for security. */
+    els.sessionCookieInput.value = "";
 
     navigateTo(screens.pasteLink);
   } catch (err) {
