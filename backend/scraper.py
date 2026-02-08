@@ -48,7 +48,9 @@ class PostNotFoundError(ScraperError):
 class PrivatePostError(ScraperError):
     """Raised when the Instagram post belongs to a private account.
 
-    Only public posts can be scraped without authentication.
+    With authenticated sessions, private posts may be accessible
+    if the logged-in user follows the account. Otherwise, only
+    public posts can be scraped.
     """
 
 
@@ -94,14 +96,18 @@ def extract_shortcode(url: str) -> str:
     return match.group(1)
 
 
-def _fetch_comments_from_post(shortcode: str) -> list[CommentData]:
+def _fetch_comments_from_post(
+    shortcode: str,
+    loader: instaloader.Instaloader,
+) -> list[CommentData]:
     """Fetch all comments from an Instagram post via instaloader.
 
-    Creates a fresh instaloader context (anonymous, no login required
-    for public posts) and iterates over every comment on the post.
+    Uses the provided instaloader instance (which may be authenticated)
+    to iterate over every comment on the post.
 
     Args:
         shortcode: The Instagram post shortcode (e.g. 'ABC123').
+        loader: A configured Instaloader instance (anonymous or logged-in).
 
     Returns:
         A list of CommentData objects, one per comment.
@@ -112,16 +118,6 @@ def _fetch_comments_from_post(shortcode: str) -> list[CommentData]:
         RateLimitError: If Instagram throttles the request.
         ScraperError: For any other unexpected instaloader failure.
     """
-    loader = instaloader.Instaloader(
-        download_pictures=False,
-        download_videos=False,
-        download_video_thumbnails=False,
-        download_geotags=False,
-        download_comments=False,
-        save_metadata=False,
-        compress_json=False,
-    )
-
     try:
         post = instaloader.Post.from_shortcode(loader.context, shortcode)
     except instaloader.exceptions.QueryReturnedNotFoundException:
@@ -184,14 +180,18 @@ def _aggregate_comments(comments: list[CommentData]) -> list[CommentUserData]:
     )
 
 
-def fetch_comments(url: str) -> FetchCommentsResponse:
-    """Scrape comments from a public Instagram post and return aggregated results.
+def fetch_comments(
+    url: str,
+    loader: instaloader.Instaloader,
+) -> FetchCommentsResponse:
+    """Scrape comments from an Instagram post and return aggregated results.
 
     This is the main entry point used by the API endpoint. It orchestrates
     URL parsing, comment fetching, and aggregation into the response model.
 
     Args:
         url: Full Instagram post URL.
+        loader: A configured Instaloader instance (anonymous or logged-in).
 
     Returns:
         FetchCommentsResponse with deduplicated user list and total comment count.
@@ -206,7 +206,7 @@ def fetch_comments(url: str) -> FetchCommentsResponse:
     shortcode = extract_shortcode(url)
     logger.info("Scraping comments for post shortcode: %s", shortcode)
 
-    comments = _fetch_comments_from_post(shortcode)
+    comments = _fetch_comments_from_post(shortcode, loader)
     users = _aggregate_comments(comments)
 
     response = FetchCommentsResponse(
