@@ -11,7 +11,6 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
 import instaloader
-import instaloader.exceptions
 
 logger = logging.getLogger(__name__)
 
@@ -30,25 +29,10 @@ class SessionStoreError(Exception):
 
 
 class LoginFailedError(SessionStoreError):
-    """Raised when Instagram rejects the provided credentials.
+    """Raised when the provided session cookie is invalid or expired.
 
-    Double-check the username and password, then try again.
-    """
-
-
-class TwoFactorRequiredError(SessionStoreError):
-    """Raised when the Instagram account requires two-factor authentication.
-
-    Two-factor authentication is not supported by this application.
-    Disable 2FA on the account or use a different account.
-    """
-
-
-class ChallengeRequiredError(SessionStoreError):
-    """Raised when Instagram requires a security challenge (e.g. email/SMS verification).
-
-    Open the Instagram app or website, complete the challenge,
-    then try logging in here again.
+    Ensure you are logged into instagram.com, copy a fresh ``sessionid``
+    cookie value, and try again.
     """
 
 
@@ -97,20 +81,25 @@ class SessionStore:
 
     # -- public API ----------------------------------------------------------
 
-    def login(self, username: str, password: str) -> str:
-        """Authenticate with Instagram and store the resulting session.
+    def login_with_cookie(self, session_cookie: str) -> tuple[str, str]:
+        """Authenticate with Instagram using a browser session cookie.
+
+        Imports the ``sessionid`` cookie from the user's browser session
+        to create an authenticated Instaloader instance, bypassing the
+        login API (which is blocked by Instagram's checkpoint/challenge system).
 
         Args:
-            username: Instagram account username.
-            password: Instagram account password.
+            session_cookie: The value of the ``sessionid`` cookie from an
+                active instagram.com browser session.
 
         Returns:
-            A UUID4 session ID string for use in subsequent requests.
+            A tuple of ``(session_id, username)`` where *session_id* is a
+            UUID4 string for subsequent requests and *username* is the
+            Instagram handle associated with the cookie.
 
         Raises:
-            LoginFailedError: If the credentials are invalid.
-            TwoFactorRequiredError: If the account has 2FA enabled.
-            ChallengeRequiredError: If Instagram demands a security challenge.
+            LoginFailedError: If the cookie is invalid, expired, or does
+                not resolve to an active Instagram session.
         """
         loader = instaloader.Instaloader(
             download_pictures=False,
@@ -122,45 +111,27 @@ class SessionStore:
             compress_json=False,
         )
 
-        try:
-            loader.login(username, password)
-        except instaloader.exceptions.BadCredentialsException as exc:
+        loader.context.update_cookies({"sessionid": session_cookie})
+        username = loader.test_login()
+
+        if username is None:
             raise LoginFailedError(
-                "Invalid username or password. Please check your credentials and try again."
-            ) from exc
-        except instaloader.exceptions.TwoFactorAuthRequiredException as exc:
-            raise TwoFactorRequiredError(
-                "This account requires two-factor authentication, which is not supported. "
-                "Disable 2FA or use a different account."
-            ) from exc
-        except instaloader.exceptions.LoginException as exc:
-            # Catch the parent LoginException for cases like "Checkpoint required"
-            # that aren't raised as a more specific subclass.
-            error_msg = str(exc).lower()
-            if "checkpoint" in error_msg or "challenge" in error_msg:
-                raise ChallengeRequiredError(
-                    "Instagram requires a security checkpoint (email/SMS verification). "
-                    "Complete the challenge in the Instagram app, then try again."
-                ) from exc
-            raise LoginFailedError(f"Login failed: {exc}") from exc
-        except instaloader.exceptions.ConnectionException as exc:
-            error_msg = str(exc).lower()
-            if "challenge" in error_msg or "checkpoint" in error_msg:
-                raise ChallengeRequiredError(
-                    "Instagram requires a security challenge (email/SMS verification). "
-                    "Complete the challenge in the Instagram app, then try again."
-                ) from exc
-            raise LoginFailedError(f"Connection error during login: {exc}. Check your network and try again.") from exc
+                "Invalid or expired session cookie. "
+                "Make sure you are logged into instagram.com, copy a fresh "
+                "'sessionid' cookie value, and try again."
+            )
+
+        loader.context.username = username
 
         session_id = str(uuid.uuid4())
         self._sessions[session_id] = _SessionEntry(loader=loader)
 
         logger.info(
-            "Login successful for user %r, session_id=%s",
+            "Cookie login successful for user %r, session_id=%s",
             username,
             session_id,
         )
-        return session_id
+        return session_id, username
 
     def get_client(self, session_id: str) -> instaloader.Instaloader:
         """Retrieve an authenticated Instaloader instance by session ID.
@@ -169,7 +140,7 @@ class SessionStore:
         active sessions are not prematurely expired.
 
         Args:
-            session_id: UUID4 string returned by a previous ``login()`` call.
+            session_id: UUID4 string returned by a previous ``login_with_cookie()`` call.
 
         Returns:
             The authenticated Instaloader instance associated with the session.
