@@ -20,6 +20,26 @@ const RING_CIRCUMFERENCE = 2 * Math.PI * 90; // ≈ 565.49
 /** Duration in seconds for each winner's countdown animation. */
 const COUNTDOWN_SECONDS = 5;
 
+/** Duration in seconds to display each individual winner reveal before proceeding. */
+const WINNER_REVEAL_SECONDS = 3;
+
+/**
+ * Pool of unique congratulatory messages — one is assigned to each winner
+ * without repeats (up to 10 winners). Shuffled at the start of each giveaway.
+ */
+const CONGRATS_MESSAGES = [
+  "Congratulations!",
+  "You're a winner!",
+  "Lucky you!",
+  "What a pick!",
+  "Amazing!",
+  "Incredible!",
+  "Well deserved!",
+  "You did it!",
+  "Brilliant!",
+  "Fantastic!",
+];
+
 /** Regex that matches common Instagram post URL formats. */
 const INSTAGRAM_URL_RE =
   /^https?:\/\/(?:www\.)?instagram\.com\/(?:p|reel|tv)\/[\w-]+\/?/i;
@@ -56,10 +76,14 @@ const els = {
   settingsError: document.getElementById("settings-error"),
   runGiveawayBtn: document.getElementById("run-giveaway-btn"),
 
-  /* Screen 3 */
+  /* Screen 3 — Searching / Reveal */
   findingLabel: document.getElementById("finding-winner-label"),
+  searchingPhase: document.getElementById("searching-phase"),
   progressArc: document.querySelector(".progress-ring__arc"),
   countdown: document.getElementById("countdown-number"),
+  winnerReveal: document.getElementById("winner-reveal"),
+  revealCongrats: document.getElementById("reveal-congrats"),
+  revealUsername: document.getElementById("reveal-username"),
 
   /* Screen 4 */
   winnersList: document.getElementById("winners-list"),
@@ -391,18 +415,95 @@ async function handleRunGiveaway() {
    ========================================================================== */
 
 /**
- * Run the suspense countdown animation for each winner sequentially.
- * The progress ring fills over COUNTDOWN_SECONDS while the countdown
- * number ticks down.
+ * Return a shuffled copy of the CONGRATS_MESSAGES array so that each
+ * winner in a single giveaway gets a unique message.
+ *
+ * @returns {string[]} Shuffled congratulatory messages.
+ */
+function shuffleCongratsMessages() {
+  const pool = [...CONGRATS_MESSAGES];
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool;
+}
+
+/**
+ * Show the searching/countdown phase and hide the winner reveal phase.
+ */
+function showSearchingPhase() {
+  els.searchingPhase.hidden = false;
+  els.winnerReveal.hidden = true;
+}
+
+/**
+ * Show the winner reveal phase and hide the searching/countdown phase.
+ * Strips and re-applies CSS animations so the entrance effect replays
+ * for every winner, not just the first.
+ *
+ * @param {string} username — The winner's Instagram handle (without @).
+ * @param {string} congratsText — The unique congrats message for this winner.
+ */
+function showRevealPhase(username, congratsText) {
+  els.searchingPhase.hidden = true;
+
+  els.revealCongrats.textContent = congratsText;
+  els.revealUsername.textContent = `@${username}`;
+
+  /*
+   * To replay CSS animations we must:
+   * 1. Strip the animation (animation: none).
+   * 2. Make the element visible (remove hidden).
+   * 3. Force a synchronous reflow so the browser commits the no-animation state.
+   * 4. Remove the inline override so the stylesheet animation kicks in fresh.
+   */
+  els.winnerReveal.style.animation = "none";
+  els.revealUsername.style.animation = "none";
+  els.winnerReveal.hidden = false;
+  void els.winnerReveal.offsetWidth;
+  els.winnerReveal.style.animation = "";
+  els.revealUsername.style.animation = "";
+}
+
+/**
+ * Wait for a specified number of seconds.
+ *
+ * @param {number} seconds — Duration to wait.
+ * @returns {Promise<void>}
+ */
+function wait(seconds) {
+  return new Promise((resolve) => setTimeout(resolve, seconds * 1000));
+}
+
+/**
+ * Run the full suspense animation sequence for all winners:
+ * [Countdown] → [Reveal Winner] → [Countdown] → [Reveal Winner] → …
+ *
+ * Each winner gets a unique congratulatory message drawn from a
+ * pre-shuffled pool so no two winners see the same text.
  *
  * @param {string[]} winners — Array of winner usernames.
- * @returns {Promise<void>} Resolves when all animations are complete.
+ * @returns {Promise<void>} Resolves when all winners have been revealed.
  */
 async function runSearchingAnimation(winners) {
+  const congratsPool = shuffleCongratsMessages();
+
   for (let i = 0; i < winners.length; i++) {
+    /* --- Countdown phase --- */
+    showSearchingPhase();
     els.findingLabel.textContent = `FINDING WINNER ${i + 1}`;
     await animateCountdown();
+
+    /* --- Reveal phase --- */
+    const congrats = congratsPool[i % congratsPool.length];
+    els.findingLabel.textContent = `WINNER ${i + 1}`;
+    showRevealPhase(winners[i], congrats);
+    await wait(WINNER_REVEAL_SECONDS);
   }
+
+  /* Ensure we return to the searching phase state for next time. */
+  showSearchingPhase();
 }
 
 /**

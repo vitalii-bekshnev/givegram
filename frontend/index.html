@@ -143,33 +143,42 @@
       </header>
 
       <div class="screen__content screen__content--centered">
-        <div class="progress-ring" aria-live="polite">
-          <svg class="progress-ring__svg" viewBox="0 0 200 200" aria-hidden="true">
-            <!-- Background track -->
-            <circle
-              class="progress-ring__track"
-              cx="100"
-              cy="100"
-              r="90"
-              fill="none"
-              stroke-width="8"
-            />
-            <!-- Animated progress arc -->
-            <circle
-              class="progress-ring__arc"
-              cx="100"
-              cy="100"
-              r="90"
-              fill="none"
-              stroke-width="8"
-              stroke-linecap="round"
-              transform="rotate(-90 100 100)"
-            />
-          </svg>
-          <span class="progress-ring__countdown" id="countdown-number" aria-label="Countdown">05</span>
+        <!-- Countdown / loading phase -->
+        <div id="searching-phase" class="searching-phase">
+          <div class="progress-ring" aria-live="polite">
+            <svg class="progress-ring__svg" viewBox="0 0 200 200" aria-hidden="true">
+              <!-- Background track -->
+              <circle
+                class="progress-ring__track"
+                cx="100"
+                cy="100"
+                r="90"
+                fill="none"
+                stroke-width="8"
+              />
+              <!-- Animated progress arc -->
+              <circle
+                class="progress-ring__arc"
+                cx="100"
+                cy="100"
+                r="90"
+                fill="none"
+                stroke-width="8"
+                stroke-linecap="round"
+                transform="rotate(-90 100 100)"
+              />
+            </svg>
+            <span class="progress-ring__countdown" id="countdown-number" aria-label="Countdown">05</span>
+          </div>
+
+          <p class="searching-label">SEARCHING COMMENTS...</p>
         </div>
 
-        <p class="searching-label">SEARCHING COMMENTS...</p>
+        <!-- Individual winner reveal phase (hidden until a winner is revealed) -->
+        <div id="winner-reveal" class="winner-reveal" hidden aria-live="polite">
+          <p class="winner-reveal__congrats" id="reveal-congrats"></p>
+          <p class="winner-reveal__username" id="reveal-username"></p>
+        </div>
       </div>
     </section>
 
