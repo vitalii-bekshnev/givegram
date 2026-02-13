@@ -11,12 +11,36 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
 import instaloader
+from instaloader import RateController
 
 logger = logging.getLogger(__name__)
 
 # Sessions older than this are considered expired and will be removed
 # during periodic cleanup.
 SESSION_TTL = timedelta(minutes=30)
+
+
+class _ConservativeRateController(RateController):
+    """Custom rate controller with more conservative limits for reliability.
+
+    Reduces default Instagram API rate limits to avoid being blocked
+    when fetching large numbers of comments.
+    """
+
+    def count_per_sliding_window(self, query_type: str) -> int:
+        """Reduce default limits by ~40% for reliability."""
+        # Default limits: GraphQL=200/11min, Other=75/11min, iPhone=199/30min
+        conservative_limits = {
+            "graphql": 120,  # reduced from 200
+            "other": 45,  # reduced from 75
+            "iphone": 120,  # reduced from 199
+        }
+        return conservative_limits.get(query_type, 50)
+
+    def query_waittime(self, query_type: str, current_time: float, untracked_queries: bool = False) -> float:
+        """Add extra buffer time to the calculated wait."""
+        base_wait = super().query_waittime(query_type, current_time, untracked_queries)
+        return base_wait * 1.5  # 50% extra buffer
 
 
 # ---------------------------------------------------------------------------
@@ -109,6 +133,11 @@ class SessionStore:
             download_comments=False,
             save_metadata=False,
             compress_json=False,
+            # Rate limiting configurations for reliability
+            sleep=True,
+            max_connection_attempts=10,
+            request_timeout=300.0,
+            rate_controller=lambda ctx: _ConservativeRateController(ctx),
         )
 
         loader.context.update_cookies({"sessionid": session_cookie})

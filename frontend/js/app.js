@@ -292,12 +292,15 @@ async function handleFetchComments(event) {
   if (!INSTAGRAM_URL_RE.test(url)) {
     showError(
       els.urlError,
-      "That doesn\u2019t look like a valid Instagram post URL."
+      "That doesn't look like a valid Instagram post URL."
     );
     return;
   }
 
   setButtonLoading(els.fetchBtn, true);
+  const labelEl = els.fetchBtn.querySelector(".btn__label");
+  const originalText = labelEl.textContent;
+  labelEl.textContent = "FETCHING...";
 
   try {
     const data = await apiPost("/fetch-comments", {
@@ -312,6 +315,7 @@ async function handleFetchComments(event) {
       showError(els.urlError, err.message);
     }
   } finally {
+    labelEl.textContent = originalText;
     setButtonLoading(els.fetchBtn, false);
   }
 }

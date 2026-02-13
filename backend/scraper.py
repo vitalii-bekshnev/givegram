@@ -7,14 +7,29 @@ with their respective comment counts.
 
 import logging
 import re
+import time
 from collections import Counter
 from dataclasses import dataclass
 
 import instaloader
+from instaloader import NodeIterator
 
 from backend.models import CommentUserData, FetchCommentsResponse
 
 logger = logging.getLogger(__name__)
+
+# Retry settings for transient Instagram API errors.
+# Instagram sometimes returns 200 OK with "fail" status and a
+# "something went wrong" message. These are safe to retry.
+_MAX_RETRIES = 3
+_INITIAL_BACKOFF_SECONDS = 5.0
+_BACKOFF_MULTIPLIER = 2.0
+
+# Delay between pagination requests to avoid rate limiting
+_PAGINATION_DELAY_SECONDS = 1.0
+# Progressive backoff multiplier for more delays as we fetch more comments
+_COMMENT_COUNT_BACKOFF_THRESHOLD = 50  # After this many comments, increase delays
+_COMMENT_COUNT_BACKOFF_MULTIPLIER = 1.2
 
 # Matches Instagram post URLs and captures the shortcode.
 # Supports /p/, /reel/, and /tv/ URL formats.
@@ -96,6 +111,42 @@ def extract_shortcode(url: str) -> str:
     return match.group(1)
 
 
+def _is_transient_error(exc: instaloader.exceptions.ConnectionException) -> bool:
+    """Determine whether an Instagram API error is transient and safe to retry.
+
+    Instagram sometimes returns HTTP 200 with a JSON ``"fail"`` status and a
+    generic "something went wrong" message. These are temporary server-side
+    hiccups that typically resolve after a short wait.
+
+    Args:
+        exc: The ConnectionException raised by instaloader.
+
+    Returns:
+        True if the error message suggests a transient failure.
+    """
+    error_msg = str(exc).lower()
+    transient_indicators = [
+        "something went wrong",
+        "try again",
+        "temporarily unavailable",
+        "server error",
+    ]
+    return any(indicator in error_msg for indicator in transient_indicators)
+
+
+def _is_rate_limit_error(exc: instaloader.exceptions.ConnectionException) -> bool:
+    """Determine whether an Instagram API error indicates rate limiting.
+
+    Args:
+        exc: The ConnectionException raised by instaloader.
+
+    Returns:
+        True if the error message suggests the request was rate-limited.
+    """
+    error_msg = str(exc).lower()
+    return "429" in error_msg or "rate" in error_msg or "too many" in error_msg
+
+
 def _fetch_comments_from_post(
     shortcode: str,
     loader: instaloader.Instaloader,
@@ -103,7 +154,8 @@ def _fetch_comments_from_post(
     """Fetch all comments from an Instagram post via instaloader.
 
     Uses the provided instaloader instance (which may be authenticated)
-    to iterate over every comment on the post.
+    to iterate over every comment on the post. Automatically retries
+    on transient Instagram API errors with exponential backoff.
 
     Args:
         shortcode: The Instagram post shortcode (e.g. 'ABC123').
@@ -129,8 +181,7 @@ def _fetch_comments_from_post(
             f"Post with shortcode {shortcode!r} belongs to a private account. Only public posts can be scraped."
         ) from None
     except instaloader.exceptions.ConnectionException as exc:
-        error_msg = str(exc).lower()
-        if "429" in error_msg or "rate" in error_msg or "too many" in error_msg:
+        if _is_rate_limit_error(exc):
             raise RateLimitError(
                 "Instagram is rate-limiting requests. Please wait a few minutes and try again."
             ) from exc
@@ -140,24 +191,70 @@ def _fetch_comments_from_post(
 
     comments: list[CommentData] = []
 
-    try:
-        for comment in post.get_comments():
-            comments.append(
-                CommentData(
-                    username=comment.owner.username,
-                    text=comment.text,
-                    timestamp=comment.created_at_utc.timestamp(),
+    # Temporarily increase GraphQL page length to force using GraphQL endpoint
+    # instead of iPhone endpoint which is being blocked by Instagram
+    original_page_length = NodeIterator._graphql_page_length
+    NodeIterator._graphql_page_length = 1000  # High value to always use GraphQL
+
+    for attempt in range(1, _MAX_RETRIES + 1):
+        comments.clear()
+        try:
+            for comment_count, comment in enumerate(post.get_comments()):
+                # Add progressive delay between pagination pages
+                # Instagram typically paginates 12 comments at a time
+                if comment_count > 0 and comment_count % 12 == 0:
+                    base_delay = _PAGINATION_DELAY_SECONDS
+
+                    # Add extra delay for large comment sections
+                    if comment_count > _COMMENT_COUNT_BACKOFF_THRESHOLD:
+                        extra_backoff = comment_count // _COMMENT_COUNT_BACKOFF_THRESHOLD
+                        actual_delay = base_delay * (_COMMENT_COUNT_BACKOFF_MULTIPLIER**extra_backoff)
+                    else:
+                        actual_delay = base_delay
+
+                    time.sleep(actual_delay)
+
+                comments.append(
+                    CommentData(
+                        username=comment.owner.username,
+                        text=comment.text,
+                        timestamp=comment.created_at_utc.timestamp(),
+                    )
                 )
+
+            # All comments fetched successfully — exit the retry loop.
+            logger.info("Successfully fetched %d comments", len(comments))
+            break
+
+        except instaloader.exceptions.ConnectionException as exc:
+            if _is_rate_limit_error(exc):
+                raise RateLimitError(
+                    "Instagram rate-limited the request while fetching comments. "
+                    "Please wait a few minutes and try again."
+                ) from exc
+
+            if not _is_transient_error(exc) or attempt == _MAX_RETRIES:
+                raise ScraperError(
+                    f"Error while fetching comments for post {shortcode!r}: {exc}. "
+                    f"Fetched {len(comments)} comments before error occurred. "
+                    "Some comments may have been missed."
+                ) from exc
+
+            backoff = _INITIAL_BACKOFF_SECONDS * (_BACKOFF_MULTIPLIER ** (attempt - 1))
+            logger.warning(
+                "Transient error fetching comments for post %s (attempt %d/%d): %s. "
+                "Currently have %d comments. Retrying in %.1fs…",
+                shortcode,
+                attempt,
+                _MAX_RETRIES,
+                exc,
+                len(comments),
+                backoff,
             )
-    except instaloader.exceptions.ConnectionException as exc:
-        error_msg = str(exc).lower()
-        if "429" in error_msg or "rate" in error_msg or "too many" in error_msg:
-            raise RateLimitError(
-                "Instagram rate-limited the request while fetching comments. Please wait a few minutes and try again."
-            ) from exc
-        raise ScraperError(
-            f"Error while fetching comments for post {shortcode!r}: {exc}. Some comments may have been missed."
-        ) from exc
+            time.sleep(backoff)
+
+    # Restore original page length
+    NodeIterator._graphql_page_length = original_page_length
 
     logger.info("Fetched %d comments from post %s", len(comments), shortcode)
     return comments
