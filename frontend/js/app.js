@@ -59,6 +59,9 @@ const screens = {
   results: document.getElementById("screen-results"),
 };
 
+/** Loading spinner shown while a saved cookie is validated on page load. */
+const appLoading = document.getElementById("app-loading");
+
 const els = {
   /* Screen 0 — Login */
   loginForm: document.getElementById("login-form"),
@@ -122,6 +125,11 @@ const state = {
  * @param {HTMLElement} target — The screen section element to activate.
  */
 function navigateTo(target) {
+  /* Dismiss the initial loading indicator once a real screen is shown. */
+  if (appLoading) {
+    appLoading.hidden = true;
+  }
+
   const current = document.querySelector(".screen--active");
   if (current) {
     current.classList.remove("screen--active");
@@ -215,24 +223,141 @@ async function apiPost(endpoint, body) {
 }
 
 /* ==========================================================================
-   Session Expiry Helper
+   Cookie Persistence (localStorage)
+   ========================================================================== */
+
+/** Key used to store the raw Instagram session cookie in localStorage. */
+const COOKIE_STORAGE_KEY = "givegram_session_cookie";
+
+/** Key used to store the backend session ID so we can skip re-login on refresh. */
+const SESSION_ID_STORAGE_KEY = "givegram_session_id";
+
+/**
+ * Persist the raw Instagram session cookie so it survives page reloads
+ * and can be used for transparent re-authentication.
+ *
+ * @param {string} cookie — The sessionid cookie value.
+ */
+function saveCookie(cookie) {
+  localStorage.setItem(COOKIE_STORAGE_KEY, cookie);
+}
+
+/**
+ * Retrieve a previously saved session cookie from localStorage.
+ *
+ * @returns {string | null} The stored cookie, or null if absent.
+ */
+function getSavedCookie() {
+  return localStorage.getItem(COOKIE_STORAGE_KEY);
+}
+
+/** Remove the persisted session cookie (e.g. on logout or when stale). */
+function clearSavedCookie() {
+  localStorage.removeItem(COOKIE_STORAGE_KEY);
+}
+
+/**
+ * Persist the backend session ID so that page reloads can reuse the
+ * existing Instaloader session without contacting Instagram again.
+ *
+ * @param {string} sessionId — The UUID4 session identifier from /api/login.
+ */
+function saveSessionId(sessionId) {
+  localStorage.setItem(SESSION_ID_STORAGE_KEY, sessionId);
+}
+
+/**
+ * Retrieve a previously saved backend session ID.
+ *
+ * @returns {string | null} The stored session ID, or null if absent.
+ */
+function getSavedSessionId() {
+  return localStorage.getItem(SESSION_ID_STORAGE_KEY);
+}
+
+/** Remove the persisted session ID (e.g. on logout or when the session expires). */
+function clearSavedSessionId() {
+  localStorage.removeItem(SESSION_ID_STORAGE_KEY);
+}
+
+/* ==========================================================================
+   Session Expiry & Transparent Re-authentication
    ========================================================================== */
 
 /**
- * If an API error signals an expired or invalid session (HTTP 401),
- * clear the session state and redirect the user to the login screen.
+ * Attempt to re-authenticate with the backend using a cookie saved in
+ * localStorage. This allows the app to recover silently when the
+ * server-side session expires without forcing the user back to the
+ * login screen.
+ *
+ * @returns {Promise<boolean>} True if re-authentication succeeded and
+ *   state.sessionId has been refreshed; false otherwise.
+ */
+async function tryReauthenticate() {
+  const savedCookie = getSavedCookie();
+  if (!savedCookie) {
+    return false;
+  }
+
+  try {
+    const data = await apiPost("/login", { session_cookie: savedCookie });
+    state.sessionId = data.session_id;
+    saveSessionId(data.session_id);
+    return true;
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401) {
+      /* Cookie is genuinely stale — clear everything. */
+      clearSavedCookie();
+      clearSavedSessionId();
+    }
+    /* Network / abort errors leave stored credentials intact for the next attempt. */
+    return false;
+  }
+}
+
+/**
+ * Clear the in-memory session and redirect the user to the login screen
+ * with an explanatory message. Does NOT clear the persisted cookie —
+ * callers (or tryReauthenticate) are responsible for that when the
+ * cookie is known to be stale.
+ *
+ * @param {string} message — Error text shown on the login screen.
+ */
+function redirectToLogin(message) {
+  state.sessionId = null;
+  clearSavedSessionId();
+  navigateTo(screens.login);
+  showError(els.loginError, message);
+}
+
+/**
+ * Handle an API error that may signal an expired or invalid session
+ * (HTTP 401). Attempts transparent re-authentication using a saved
+ * cookie before falling back to the login screen.
  *
  * @param {Error} err — The error thrown by apiPost.
- * @returns {boolean} True if the error was a 401 and the redirect was triggered.
+ * @returns {Promise<"not_session_error" | "reauthenticated" | "redirected">}
+ *   - "not_session_error": The error was not a 401; caller should handle it.
+ *   - "reauthenticated": Re-auth succeeded; caller should retry the request.
+ *   - "redirected": Cookie is stale; user has been sent to the login screen.
  */
-function handleSessionExpiry(err) {
-  if (err instanceof ApiError && err.status === 401) {
-    state.sessionId = null;
-    navigateTo(screens.login);
-    showError(els.loginError, "Session expired, please log in again.");
-    return true;
+async function handleSessionExpiry(err) {
+  if (!(err instanceof ApiError && err.status === 401)) {
+    return "not_session_error";
   }
-  return false;
+
+  if (await tryReauthenticate()) {
+    return "reauthenticated";
+  }
+
+  /* Pick a message based on whether tryReauthenticate cleared the cookie
+     (stale → gone) or kept it (network error → still present). */
+  redirectToLogin(
+    getSavedCookie()
+      ? "Could not reconnect to Instagram. Please try again."
+      : "Your session cookie has expired. Please paste a new one."
+  );
+  return "redirected";
 }
 
 /* ==========================================================================
@@ -263,6 +388,10 @@ async function handleLogin(event) {
     const data = await apiPost("/login", { session_cookie: sessionCookie });
     state.sessionId = data.session_id;
 
+    /* Persist credentials so we can skip re-login on future page loads. */
+    saveCookie(sessionCookie);
+    saveSessionId(data.session_id);
+
     /* Clear the cookie input for security. */
     els.sessionCookieInput.value = "";
 
@@ -288,6 +417,8 @@ async function handleLogout() {
   }
 
   state.sessionId = null;
+  clearSavedCookie();
+  clearSavedSessionId();
   navigateTo(screens.login);
 }
 
@@ -335,9 +466,25 @@ async function handleFetchComments(event) {
     state.totalComments = data.total_comments;
     navigateTo(screens.settings);
   } catch (err) {
-    if (!handleSessionExpiry(err)) {
+    const result = await handleSessionExpiry(err);
+
+    if (result === "reauthenticated") {
+      /* Backend session was refreshed — retry the request once. */
+      try {
+        const data = await apiPost("/fetch-comments", {
+          url,
+          session_id: state.sessionId,
+        });
+        state.users = data.users;
+        state.totalComments = data.total_comments;
+        navigateTo(screens.settings);
+      } catch (retryErr) {
+        showError(els.urlError, retryErr.message);
+      }
+    } else if (result === "not_session_error") {
       showError(els.urlError, err.message);
     }
+    /* "redirected" — user is already on the login screen, nothing to do. */
   } finally {
     labelEl.textContent = originalText;
     setButtonLoading(els.fetchBtn, false);
@@ -666,8 +813,11 @@ function handleRunAgain() {
    Event Binding
    ========================================================================== */
 
-/** Wire up all event listeners once the DOM is ready. */
-function init() {
+/**
+ * Wire up all event listeners and attempt to restore a previous session
+ * from localStorage so the user skips the login screen when possible.
+ */
+async function init() {
   /* Screen 0 — Login */
   els.loginForm.addEventListener("submit", handleLogin);
 
@@ -692,6 +842,65 @@ function init() {
   /* Screen 4 */
   els.shareBtn.addEventListener("click", handleShare);
   els.runAgainBtn.addEventListener("click", handleRunAgain);
+
+  /*
+   * Restore session using a two-tier strategy to minimise Instagram API hits:
+   *
+   *   1. Try the stored backend session_id via /api/validate-session.
+   *      This is a cheap in-memory check — no Instagram contact at all.
+   *
+   *   2. If that fails (server restarted / session expired), fall back to
+   *      re-login with the stored cookie. This DOES hit Instagram, but
+   *      only when absolutely necessary.
+   *
+   *   3. If neither credential is available, show the login screen.
+   *
+   * The loading indicator stays visible until navigateTo() is called.
+   */
+  const savedSessionId = getSavedSessionId();
+  const savedCookie = getSavedCookie();
+
+  /* --- Tier 1: reuse existing backend session (no Instagram hit) --- */
+  if (savedSessionId) {
+    try {
+      await apiPost("/validate-session", { session_id: savedSessionId });
+      state.sessionId = savedSessionId;
+      navigateTo(screens.pasteLink);
+      return;
+    } catch {
+      /* Session gone (server restart / TTL) — clear stale id, try cookie. */
+      clearSavedSessionId();
+    }
+  }
+
+  /* --- Tier 2: re-login with stored cookie (contacts Instagram) --- */
+  if (savedCookie) {
+    try {
+      const data = await apiPost("/login", { session_cookie: savedCookie });
+      state.sessionId = data.session_id;
+      saveSessionId(data.session_id);
+      navigateTo(screens.pasteLink);
+      return;
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        /* Cookie is genuinely stale — clear everything. */
+        clearSavedCookie();
+        clearSavedSessionId();
+        navigateTo(screens.login);
+        showError(
+          els.loginError,
+          "Your saved session has expired. Please paste a new cookie."
+        );
+      } else {
+        /* Network / abort error — keep credentials for the next attempt. */
+        navigateTo(screens.login);
+      }
+      return;
+    }
+  }
+
+  /* --- Tier 3: no stored credentials — show login screen --- */
+  navigateTo(screens.login);
 }
 
 init();

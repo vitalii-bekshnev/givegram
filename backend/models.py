@@ -28,6 +28,26 @@ class LoginResponse(BaseModel):
     username: str = Field(description="Instagram username resolved from the session cookie")
 
 
+class ValidateSessionRequest(BaseModel):
+    """Request body for the /api/validate-session endpoint.
+
+    Used for lightweight session checks on page load to avoid
+    hitting the Instagram API unnecessarily.
+    """
+
+    session_id: str = Field(description="Session ID to validate")
+
+
+class ValidateSessionResponse(BaseModel):
+    """Response body returned by /api/validate-session.
+
+    A successful response (HTTP 200) confirms the session is alive.
+    If the session is invalid or expired, the endpoint returns HTTP 401 instead.
+    """
+
+    username: str = Field(description="Instagram username associated with the session")
+
+
 class FetchCommentsRequest(BaseModel):
     """Request body for the /api/fetch-comments endpoint.
 

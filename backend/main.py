@@ -22,6 +22,8 @@ from backend.models import (
     LoginResponse,
     PickWinnersRequest,
     PickWinnersResponse,
+    ValidateSessionRequest,
+    ValidateSessionResponse,
 )
 from backend.scraper import (
     InvalidURLError,
@@ -129,6 +131,27 @@ async def api_logout(session_id: str) -> dict[str, str]:
     logger.info("Logout request for session %s", session_id)
     session_store.remove(session_id)
     return {"detail": "Logged out successfully"}
+
+
+@app.post("/api/validate-session", response_model=ValidateSessionResponse)  # type: ignore[untyped-decorator]
+async def api_validate_session(request: ValidateSessionRequest) -> ValidateSessionResponse:
+    """Check whether a backend session is still alive without hitting Instagram.
+
+    The frontend calls this on page load with a previously stored session_id
+    so it can skip a full re-login (which contacts Instagram) when the
+    in-memory session is still valid.
+
+    Raises:
+        HTTPException 401: If the session does not exist or has expired.
+    """
+    logger.info("Session validation request for session %s", request.session_id)
+
+    try:
+        username = session_store.validate(request.session_id)
+    except SessionNotFoundError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+    return ValidateSessionResponse(username=username)
 
 
 # ---------------------------------------------------------------------------

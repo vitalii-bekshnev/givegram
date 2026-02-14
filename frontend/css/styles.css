@@ -704,8 +704,33 @@ a {
 }
 
 /* --------------------------------------------------------------------------
-   13. Utility / Accessibility
+   13. App Loading Indicator
+   --------------------------------------------------------------------------
+   Shown while JS validates a saved session cookie on page load.
+   Hidden as soon as init() activates a screen.
    -------------------------------------------------------------------------- */
+.app-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.app-loading__spinner {
+  display: block;
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--color-crimson-light);
+  border-top-color: var(--color-crimson);
+  border-radius: var(--radius-circle);
+  animation: spin 0.6s linear infinite;
+}
+
+/* --------------------------------------------------------------------------
+   14. Utility / Accessibility
+   -------------------------------------------------------------------------- */
+
 [hidden] {
   display: none !important;
 }
@@ -728,7 +753,7 @@ a {
 }
 
 /* --------------------------------------------------------------------------
-   14. Responsive Adjustments
+   15. Responsive Adjustments
    -------------------------------------------------------------------------- */
 
 /* Slightly larger screens — add subtle phone-frame effect */

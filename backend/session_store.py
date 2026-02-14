@@ -78,11 +78,13 @@ class _SessionEntry:
 
     Attributes:
         loader: Authenticated Instaloader instance.
+        username: Instagram handle resolved during login.
         created_at: UTC timestamp when the session was created.
         last_used: UTC timestamp of the most recent access.
     """
 
     loader: instaloader.Instaloader
+    username: str
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     last_used: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -102,6 +104,35 @@ class SessionStore:
 
     def __init__(self) -> None:
         self._sessions: dict[str, _SessionEntry] = {}
+
+    # -- internal helpers ----------------------------------------------------
+
+    def _get_valid_entry(self, session_id: str) -> _SessionEntry:
+        """Look up a session and verify it hasn't expired.
+
+        Updates ``last_used`` on success.
+
+        Args:
+            session_id: UUID4 string to look up.
+
+        Returns:
+            The live session entry.
+
+        Raises:
+            SessionNotFoundError: If the session does not exist or has expired.
+        """
+        entry = self._sessions.get(session_id)
+        if entry is None:
+            raise SessionNotFoundError("Session not found or has expired. Please log in again.")
+
+        now = datetime.now(UTC)
+        if now - entry.created_at > SESSION_TTL:
+            self._sessions.pop(session_id, None)
+            logger.info("Session %s expired, removing", session_id)
+            raise SessionNotFoundError("Session has expired. Please log in again.")
+
+        entry.last_used = now
+        return entry
 
     # -- public API ----------------------------------------------------------
 
@@ -153,7 +184,7 @@ class SessionStore:
         loader.context.username = username
 
         session_id = str(uuid.uuid4())
-        self._sessions[session_id] = _SessionEntry(loader=loader)
+        self._sessions[session_id] = _SessionEntry(loader=loader, username=username)
 
         logger.info(
             "Cookie login successful for user %r, session_id=%s",
@@ -177,18 +208,25 @@ class SessionStore:
         Raises:
             SessionNotFoundError: If the session ID does not exist or has expired.
         """
-        entry = self._sessions.get(session_id)
-        if entry is None:
-            raise SessionNotFoundError("Session not found or has expired. Please log in again.")
+        return self._get_valid_entry(session_id).loader
 
-        now = datetime.now(UTC)
-        if now - entry.created_at > SESSION_TTL:
-            self._sessions.pop(session_id, None)
-            logger.info("Session %s expired, removing", session_id)
-            raise SessionNotFoundError("Session has expired. Please log in again.")
+    def validate(self, session_id: str) -> str:
+        """Check whether a session is still active without hitting Instagram.
 
-        entry.last_used = now
-        return entry.loader
+        Intended for lightweight session checks on page load so the
+        frontend can skip a full re-login when the backend session is
+        still alive.  Updates the ``last_used`` timestamp.
+
+        Args:
+            session_id: UUID4 string to validate.
+
+        Returns:
+            The Instagram username associated with the session.
+
+        Raises:
+            SessionNotFoundError: If the session does not exist or has expired.
+        """
+        return self._get_valid_entry(session_id).username
 
     def remove(self, session_id: str) -> None:
         """Remove a session, effectively logging the user out.
