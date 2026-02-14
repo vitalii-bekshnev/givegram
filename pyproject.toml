@@ -39,3 +39,15 @@ disable = [
     "import-error",        # handled by mypy; pylint can't reliably resolve venv imports
     "too-few-public-methods",  # dataclasses and Pydantic models are intentionally small
 ]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["backend/tests"]
+
+[tool.coverage.run]
+source = ["backend"]
+omit = ["backend/tests/*"]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 100
