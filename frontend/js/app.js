@@ -6,7 +6,7 @@
  *   1. Paste Link — accept an Instagram URL and fetch comments
  *   2. Giveaway Settings — choose number of winners & minimum comments
  *   3. Searching Animation — suspense countdown while "finding" winners
- *   4. Winner Results — display selected winners with share/restart actions
+ *   4. Winner Results — display selected winners with share/run-again/new-post actions
  */
 "use strict";
 
@@ -92,6 +92,7 @@ const els = {
   winnersList: document.getElementById("winners-list"),
   shareBtn: document.getElementById("share-btn"),
   runAgainBtn: document.getElementById("run-again-btn"),
+  newPostBtn: document.getElementById("new-post-btn"),
 };
 
 /* ==========================================================================
@@ -744,7 +745,7 @@ function showResults(winners) {
 }
 
 /* ==========================================================================
-   Screen 4 — Actions (Share & Run Again)
+   Screen 4 — Actions (Share, Run Again & New Post)
    ========================================================================== */
 
 /**
@@ -781,23 +782,46 @@ async function handleShare() {
 }
 
 /**
- * Reset the giveaway state (but keep the session) and navigate back
- * to the Paste Link screen so the user can start a new giveaway
- * without re-authenticating.
+ * Reset giveaway settings state and UI back to their defaults
+ * (1 winner, 1 minimum comment, all option buttons deselected
+ * except the first in each group).
  */
-function handleRunAgain() {
-  state.users = [];
-  state.totalComments = 0;
+function resetSettingsToDefaults() {
   state.numWinners = 1;
   state.minComments = 1;
-  state.winners = [];
 
-  /* Reset settings UI to defaults. */
   document.querySelectorAll(".option-btn").forEach((btn) => {
     const isDefault = btn.dataset.value === "1";
     btn.classList.toggle("option-btn--selected", isDefault);
     btn.setAttribute("aria-pressed", String(isDefault));
   });
+}
+
+/**
+ * Re-run the giveaway for the same post: clear only the winners and
+ * reset settings, then navigate back to the Settings screen so the
+ * user can adjust parameters and re-roll without re-fetching comments.
+ */
+function handleRunAgain() {
+  state.winners = [];
+  resetSettingsToDefaults();
+
+  hideError(els.settingsError);
+  els.winnersList.innerHTML = "";
+
+  navigateTo(screens.settings);
+}
+
+/**
+ * Start a completely new giveaway: clear all state (comments, winners,
+ * settings) and navigate back to the Paste Link screen so the user
+ * can paste a different post URL.
+ */
+function handleNewPost() {
+  state.users = [];
+  state.totalComments = 0;
+  state.winners = [];
+  resetSettingsToDefaults();
 
   /* Clear previous input & errors. */
   els.urlInput.value = "";
@@ -842,6 +866,7 @@ async function init() {
   /* Screen 4 */
   els.shareBtn.addEventListener("click", handleShare);
   els.runAgainBtn.addEventListener("click", handleRunAgain);
+  els.newPostBtn.addEventListener("click", handleNewPost);
 
   /*
    * Restore session using a two-tier strategy to minimise Instagram API hits:
